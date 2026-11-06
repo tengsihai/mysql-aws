@@ -76,7 +76,7 @@ Environment，该 Environment 上的 `AWS_ROLE_ARN` 决定用哪个 IAM 角色�
 ### 3.2 `migrate.yml` —— 合并进环境分支后
 
 ```
-push 到 dev/staging/prod（且改动落在 sql/ scripts/ flyway.conf 等路径上）
+push 到 dev/staging/prod（合并进环境分支即触发，不按改动路径过滤）
   │
   ├─ check-conventions.sh        规范与密钥检查
   ├─ OIDC 换取 rds-migrate-<环境> 角色     （无长期密钥）
@@ -263,6 +263,11 @@ sql/R__<描述>.sql             可重复迁移（每次校验变更后重跑）
 | 已应用版本 | `V1 init schema`、`V2 seed test data`（dev 环境已执行） |
 | Flyway | 13.12.1（本地与 CI 锁同一版本） |
 | 接入环境 | `dev` |
+| IAM 角色 | `rds-migrate-dev`（OIDC，最小权限，已创建） |
+| GitHub Environment | `dev`，部署分支限定为 `dev`，变量 `AWS_ROLE_ARN` 已填 |
+| 仓库变量 | `MIGRATE_ENVIRONMENTS=["dev"]`、`AWS_REGION=ap-northeast-1` |
+
+§4 的一次性配置**已完成**，新环境按 §4.3 的清单接入即可。
 
 ---
 

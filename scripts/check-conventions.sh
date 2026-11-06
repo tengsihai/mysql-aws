@@ -55,7 +55,7 @@ done
 bad_names=0
 for base in "${names[@]}"; do
   if [[ ! "$base" =~ ^V[0-9]+__[A-Za-z0-9_]+\.sql$ && ! "$base" =~ ^R__[A-Za-z0-9_]+\.sql$ ]]; then
-    err "文件名不符合 Flyway 版本规范：$base（应为 V<数字>__<描述>.sql 或 R__<描述>.sql，描述只用字母数字下划线）"
+    err "文件名不符合 Flyway 版本规范：${base}（应为 V<数字>__<描述>.sql 或 R__<描述>.sql，描述只用字母数字下划线）"
     bad_names=$((bad_names + 1))
   fi
 done
@@ -148,7 +148,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
         warn "已改动历史迁移文件：$f —— 若它在目标环境已执行过，checksum 会对不上，需先执行 flyway repair"
       done <<<"$changed"
     else
-      ok "没有改动已存在的迁移文件（基准：$base_ref）"
+      ok "没有改动已存在的迁移文件（基准：${base_ref}）"
     fi
   fi
 fi

@@ -8,7 +8,7 @@
         "secretsmanager:GetSecretValue",
         "secretsmanager:DescribeSecret"
       ],
-      "Resource": "arn:aws:secretsmanager:__REGION__::__ACCOUNT_ID__:secret:rds!db-*"
+      "Resource": "arn:aws:secretsmanager:__REGION__:__ACCOUNT_ID__:secret:rds!db-*"
     },
     {
       "Sid": "ResolveRdsEndpointAndSecretArn",
@@ -26,13 +26,13 @@
       "Sid": "ScaleBastionOnly",
       "Effect": "Allow",
       "Action": "autoscaling:UpdateAutoScalingGroup",
-      "Resource": "arn:aws:autoscaling:__REGION__::__ACCOUNT_ID__:autoScalingGroup:*:autoScalingGroupName/__ASG_NAME__"
+      "Resource": "arn:aws:autoscaling:__REGION__:__ACCOUNT_ID__:autoScalingGroup:*:autoScalingGroupName/__ASG_NAME__"
     },
     {
       "Sid": "StartSessionOnTaggedBastionOnly",
       "Effect": "Allow",
       "Action": "ssm:StartSession",
-      "Resource": "arn:aws:ec2:__REGION__::__ACCOUNT_ID__:instance/*",
+      "Resource": "arn:aws:ec2:__REGION__:__ACCOUNT_ID__:instance/*",
       "Condition": {
         "StringEquals": {
           "ssm:resourceTag/__BASTION_TAG_KEY__": "__BASTION_TAG_VALUE__"
@@ -52,7 +52,7 @@
         "ssm:TerminateSession",
         "ssm:ResumeSession"
       ],
-      "Resource": "arn:aws:ssm:__REGION__::__ACCOUNT_ID__:session/*"
+      "Resource": "arn:aws:ssm:__REGION__:__ACCOUNT_ID__:session/*"
     },
     {
       "Sid": "InspectSsmTargets",

@@ -21,13 +21,8 @@ name: 迁移
 
 on:
   push:
+    # 合并即发布：只要合并进环境分支就触发，不按改动路径过滤
     branches: [dev, staging, prod]
-    paths:
-      - 'sql/**'
-      - 'flyway.conf'
-      - 'scripts/**'
-      - 'infra/**'
-      - '.github/workflows/migrate.yml'
   workflow_dispatch:
 
 permissions:
@@ -67,7 +62,14 @@ jobs:
           curl -fsSL -o /tmp/flyway.tar.gz \
             "https://github.com/flyway/flyway/releases/download/flyway-${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz"
           tar -xzf /tmp/flyway.tar.gz -C /tmp
-          echo "/tmp/flyway-commandline-${FLYWAY_VERSION}" >> "$GITHUB_PATH"
+          # 发布包文件名带 commandline，但解压出来的目录名不带：flyway-<版本>/
+          bin_dir="/tmp/flyway-${FLYWAY_VERSION}"
+          if [ ! -x "${bin_dir}/flyway" ]; then
+            echo "找不到 ${bin_dir}/flyway，实际解压结果：" >&2
+            ls -la /tmp >&2
+            exit 1
+          fi
+          echo "${bin_dir}" >> "$GITHUB_PATH"
 
       - name: 安装 Session Manager Plugin
         run: |
