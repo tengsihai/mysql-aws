@@ -62,7 +62,14 @@ jobs:
           curl -fsSL -o /tmp/flyway.tar.gz \
             "https://github.com/flyway/flyway/releases/download/flyway-${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz"
           tar -xzf /tmp/flyway.tar.gz -C /tmp
-          echo "/tmp/flyway-commandline-${FLYWAY_VERSION}" >> "$GITHUB_PATH"
+          # 发布包文件名带 commandline，但解压出来的目录名不带：flyway-<版本>/
+          bin_dir="/tmp/flyway-${FLYWAY_VERSION}"
+          if [ ! -x "${bin_dir}/flyway" ]; then
+            echo "找不到 ${bin_dir}/flyway，实际解压结果：" >&2
+            ls -la /tmp >&2
+            exit 1
+          fi
+          echo "${bin_dir}" >> "$GITHUB_PATH"
 
       - name: 安装 Session Manager Plugin
         run: |
