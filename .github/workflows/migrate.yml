@@ -21,13 +21,8 @@ name: 迁移
 
 on:
   push:
+    # 合并即发布：只要合并进环境分支就触发，不按改动路径过滤
     branches: [dev, staging, prod]
-    paths:
-      - 'sql/**'
-      - 'flyway.conf'
-      - 'scripts/**'
-      - 'infra/**'
-      - '.github/workflows/migrate.yml'
   workflow_dispatch:
 
 permissions:

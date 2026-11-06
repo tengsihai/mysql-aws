@@ -94,7 +94,7 @@ else
   printf '%s' "$trust_json" > "${TMPDIR:-/tmp}/trust-policy.$$.json"
   aws iam create-role \
     --role-name "$ROLE_NAME" \
-    --description "GitHub Actions 跑 Flyway 迁移（${ENVIRONMENT}）：只读 RDS 密钥、建 SSM 端口转发、临时调整跳板机容量" \
+    --description "GitHub Actions Flyway migrations (${ENVIRONMENT}): read RDS secret, SSM port-forward via bastion, adjust bastion capacity" \
     --max-session-duration 3600 \
     --assume-role-policy-document "file://${TMPDIR:-/tmp}/trust-policy.$$.json" >/dev/null
   rm -f "${TMPDIR:-/tmp}/trust-policy.$$.json"
