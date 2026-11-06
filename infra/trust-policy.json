@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitHubActionsRdsMigrate",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::__ACCOUNT_ID__:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": [
+            "repo:__GITHUB_OWNER__/__GITHUB_REPO__:environment:__ENVIRONMENT__",
+            "repo:__GITHUB_OWNER__@*/__GITHUB_REPO__@*:environment:__ENVIRONMENT__"
+          ]
+        }
+      }
+    }
+  ]
+}

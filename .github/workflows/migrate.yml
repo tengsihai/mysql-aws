@@ -1,0 +1,96 @@
+name: 迁移
+
+# 分支即环境：合并进哪条分支，就发哪个环境。
+#
+#   功能分支 ──PR──> dev / staging / prod 分支 ──合并──> 触发本工作流
+#                                                   → 对应环境的 RDS
+#
+#   main 是发布后的归档分支，不触发任何部署（也不在下面的分支列表里）。
+#
+# 环境怎么选：
+#   environment: ${{ github.ref_name }} 让分支名直接映射到 GitHub Environment，
+#   该 Environment 上的 AWS_ROLE_ARN 变量决定用哪个 IAM 角色。
+#   所以「dev 分支只能用 dev 角色」这件事由分支本身保证，
+#   再配上 Environment 的 deployment branch policy（只允许 dev 分支）就更严了。
+#
+# 安全：
+#   * 不使用任何长期 AWS 密钥，全靠 OIDC 换取 rds-migrate-<环境> 角色
+#   * 数据库口令由脚本从 Secrets Manager 现取，并在日志里 add-mask
+#   * RDS 在私有子网且只放行跳板机安全组，所以通过 SSM 端口转发接入
+#   * 按环境串行：同一环境并发迁移会抢跳板机的 ASG 容量；不同环境互不影响
+
+on:
+  push:
+    branches: [dev, staging, prod]
+    paths:
+      - 'sql/**'
+      - 'flyway.conf'
+      - 'scripts/**'
+      - 'infra/**'
+      - '.github/workflows/migrate.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # OIDC 换取角色
+  contents: read
+
+concurrency:
+  # 按环境隔离：dev 的迁移不会被 staging 的排队卡住
+  group: rds-migrate-${{ github.ref_name }}
+  # 绝不取消进行中的迁移：半途而废的 DDL 比排队等待糟糕得多
+  cancel-in-progress: false
+
+env:
+  FLYWAY_VERSION: '13.12.1'
+
+jobs:
+  migrate:
+    name: Flyway 迁移（${{ github.ref_name }}）
+    runs-on: ubuntu-latest
+    # 未接入的环境直接跳过，不产生红叉。默认只接入 dev；
+    # 接入新环境时把仓库变量 MIGRATE_ENVIRONMENTS 改成 ["dev","staging"] 即可。
+    if: contains(fromJSON(vars.MIGRATE_ENVIRONMENTS || '["dev"]'), github.ref_name)
+    # 分支名 = 环境名；这里的 AWS_ROLE_ARN 来自该 Environment 的变量
+    environment: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 安装 Flyway
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/flyway.tar.gz \
+            "https://github.com/flyway/flyway/releases/download/flyway-${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz"
+          tar -xzf /tmp/flyway.tar.gz -C /tmp
+          echo "/tmp/flyway-commandline-${FLYWAY_VERSION}" >> "$GITHUB_PATH"
+
+      - name: 安装 Session Manager Plugin
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/session-manager-plugin.deb \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+          session-manager-plugin --version
+
+      - name: 迁移文件规范与密钥检查
+        run: ./scripts/check-conventions.sh
+
+      - name: 配置 AWS 凭据（OIDC）
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          # 没配仓库变量时退回项目默认区域
+          aws-region: ${{ vars.AWS_REGION || 'ap-northeast-1' }}
+          role-session-name: github-flyway-${{ github.ref_name }}
+
+      - name: 执行迁移
+        run: ./scripts/migrate.sh migrate
+
+      - name: 输出版本状态（仅失败时，用于排错）
+        if: failure()
+        run: ./scripts/migrate.sh info

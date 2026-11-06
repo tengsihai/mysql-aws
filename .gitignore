@@ -1,0 +1,25 @@
+# 本地与 CI 共用的忽略规则
+#
+# 一律不入库的东西：
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 本地临时产物
+*.log
+.session-*
+flyway.report.json
+
+# 任何可能被误放进来的真实配置
+*.pem
+*.key
+.env
+.env.*
+terraform.tfvars
+backend.hcl
