@@ -1,0 +1,67 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadRdsMasterSecret",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:__REGION__:__ACCOUNT_ID__:secret:rds!db-*"
+    },
+    {
+      "Sid": "ResolveRdsEndpointAndSecretArn",
+      "Effect": "Allow",
+      "Action": "rds:DescribeDBInstances",
+      "Resource": "*"
+    },
+    {
+      "Sid": "InspectBastionCapacity",
+      "Effect": "Allow",
+      "Action": "autoscaling:DescribeAutoScalingGroups",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ScaleBastionOnly",
+      "Effect": "Allow",
+      "Action": "autoscaling:UpdateAutoScalingGroup",
+      "Resource": "arn:aws:autoscaling:__REGION__:__ACCOUNT_ID__:autoScalingGroup:*:autoScalingGroupName/__ASG_NAME__"
+    },
+    {
+      "Sid": "StartSessionOnTaggedBastionOnly",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ec2:__REGION__:__ACCOUNT_ID__:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "ssm:resourceTag/__BASTION_TAG_KEY__": "__BASTION_TAG_VALUE__"
+        }
+      }
+    },
+    {
+      "Sid": "PortForwardingDocumentOnly",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ssm:__REGION__::document/AWS-StartPortForwardingSessionToRemoteHost"
+    },
+    {
+      "Sid": "ManageOwnSsmSessions",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:TerminateSession",
+        "ssm:ResumeSession"
+      ],
+      "Resource": "arn:aws:ssm:__REGION__:__ACCOUNT_ID__:session/*"
+    },
+    {
+      "Sid": "InspectSsmTargets",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:DescribeInstanceInformation",
+        "ssm:DescribeSessions"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
