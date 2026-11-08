@@ -5,13 +5,14 @@ name: 校验
 #   1. 规范与密钥检查 —— 命名、版本号、有没有把口令写进 SQL/配置
 #   2. Flyway 实跑     —— 在临时 MySQL 8.4 里把所有迁移真跑一遍，抓 SQL 语法/方言错误
 #
-# 分支模型：dev / staging / prod 是环境分支，main 是发布后的归档分支（不触发 CI）。
+# 分支模型：dev / staging / prod 是环境分支，
+# main 是发布后的归档分支——push 到 main 只跑本文件（只读校验），不触发迁移。
 # 合并前在 PR 上拦住问题，合并后由 migrate.yml 真正打到 RDS。
 
 on:
   pull_request:
   push:
-    branches: [dev, staging, prod]
+    branches: [main, dev, staging, prod]
 
 permissions:
   contents: read

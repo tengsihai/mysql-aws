@@ -19,11 +19,7 @@ mysql-aws/
 │   └── V2__seed_test_data.sql      # 自检表种子数据
 ├── scripts/
 │   ├── migrate.sh                  # 统一迁移入口（本地与 CI 同一条代码路径）
-│   ├── check-conventions.sh        # 命名规范 + 密钥泄露检查（零凭据）
-│   └── create-iam-role.sh          # 一次性创建 OIDC 迁移角色
-├── infra/
-│   ├── trust-policy.json           # 角色信任策略模板
-│   └── migrate-policy.json         # 角色权限策略模板
+│   └── check-conventions.sh        # 命名规范 + 密钥泄露检查（零凭据）
 └── .github/workflows/
     ├── validate.yml                # PR 校验（无 AWS 凭据）
     └── migrate.yml                 # 合并进环境分支后真正迁移
@@ -50,8 +46,18 @@ main  = 发布后的归档分支，不触发任何部署
 | `dev` | dev 环境的部署分支 | `validate.yml` + `migrate.yml` → `platform-dev-mysql` |
 | `staging` | staging 环境的部署分支 | 同上（接入后生效，见 §4.3） |
 | `prod` | 生产环境的部署分支 | 同上（接入后生效，见 §4.3） |
-| `main` | 发布后归档，只读 | **不触发部署**；指向它的 PR 仍会跑 `validate.yml` |
+| `main` | 发布后归档，只读 | 只跑 `validate.yml` 的校验，**不触发迁移**；指向它的 PR 也跑校验 |
 | 其它 | 开发用的功能分支 | 只在 PR 时跑 `validate.yml` |
+
+发布路径：
+
+```
+feat/* ──PR──► dev ──PR──► staging ──PR──► prod ──PR──► main（归档）
+```
+
+`migrate.yml` **没有 `workflow_dispatch`**：合并 PR 就是审批，不提供手动指定
+环境迁移的入口；失败后重跑失败的 job，同一个环境不会并发迁移。
+`validate.yml` 会在 push 到 `main` / 环境分支以及所有 PR 上运行，始终零凭据。
 
 工作流用 `environment: ${{ github.ref_name }}` 把分支名直接映射成 GitHub
 Environment，该 Environment 上的 `AWS_ROLE_ARN` 决定用哪个 IAM 角色——
@@ -96,13 +102,11 @@ push 到 dev/staging/prod（合并进环境分支即触发，不按改动路径�
 
 ## 4. 一次性配置
 
-### 4.1 创建 IAM 角色（OIDC，无长期密钥）
+### 4.1 IAM 角色（由 terraform-aws 管理）
 
-```bash
-./scripts/create-iam-role.sh
-```
-
-幂等，可重复执行。会打印出角色 ARN 和下面要填的 GitHub 配置。
+迁移角色 `rds-migrate-<env>` 不在本仓库创建，统一由
+[terraform-aws](https://github.com/tengsihai/terraform-aws) 的 `bootstrap/` 管理。
+本仓库只消费角色的 ARN，不维护任何 IAM 定义。
 
 角色只拿到迁移必需的权限：
 
@@ -110,12 +114,19 @@ push 到 dev/staging/prod（合并进环境分支即触发，不按改动路径�
 | --- | --- |
 | `secretsmanager:GetSecretValue`（限定 `rds!db-*`） | 取数据库口令 |
 | `rds:DescribeDBInstances` | 按端点反查实例与密钥 ARN |
-| `autoscaling:UpdateAutoScalingGroup`（限定跳板机 ASG） | 临时拉起 / 还原跳板机 |
+| `autoscaling:DescribeAutoScalingGroups` / `UpdateAutoScalingGroup`（限定跳板机 ASG） | 临时拉起 / 还原跳板机 |
 | `ssm:StartSession`（限定 `Bastion` 标签实例 + 端口转发文档） | 建隧道 |
-| `ssm:TerminateSession` / `Describe*` | 回收与探测会话 |
+| `ssm:TerminateSession` / `ResumeSession` / `Describe*` | 回收与探测会话 |
 
-> 这个角色属于本仓库的 CI 基础设施。若希望统一由 terraform-aws 管理，
-> 把 `infra/` 下两份 JSON 搬过去做成 IAM 资源即可，权限内容不变。
+取角色 ARN：
+
+```bash
+cd ../terraform-aws/bootstrap
+terraform output -json mysql_aws_migrate_role_arns
+```
+
+接入新环境时在 `terraform.tfvars` 的 `environments` 里加上环境名，
+再 apply `bootstrap/`，角色会按同一份定义创建。
 
 ### 4.2 GitHub Environment 与仓库变量
 
@@ -128,7 +139,7 @@ push 到 dev/staging/prod（合并进环境分支即触发，不按改动路径�
 | `prod` | `prod` | `arn:aws:iam::<账号>:role/rds-migrate-prod` |
 
 每个 Environment 建议再加 **Deployment branches and tags → Selected branches**，
-只允许同名分支——这样即使有人手工 dispatch，也发不到别的环境去。
+只允许同名分支——这样即使有人直接 push，也发不到别的环境去。
 `prod` 记得加 **Required reviewers**（dev 按惯例「合并即审批」，不加）。
 
 **Settings → Secrets and variables → Actions → Variables**（仓库级）：
@@ -141,7 +152,8 @@ push 到 dev/staging/prod（合并进环境分支即触发，不按改动路径�
 ### 4.3 接入新环境的清单
 
 1. terraform-aws 里把该环境的 RDS + 跳板机建出来
-2. `ENVIRONMENT=staging ./scripts/create-iam-role.sh` 建角色
+2. 在 `terraform-aws/bootstrap` 的 `environments` 里加上该环境并 apply，
+   创建 `rds-migrate-<env>` 角色
 3. GitHub 建同名 Environment，填 `AWS_ROLE_ARN`，限定部署分支
 4. 建同名分支 `staging`
 5. 仓库变量 `MIGRATE_ENVIRONMENTS` 加进该环境名
@@ -263,7 +275,7 @@ sql/R__<描述>.sql             可重复迁移（每次校验变更后重跑）
 | 已应用版本 | `V1 init schema`、`V2 seed test data`（dev 环境已执行） |
 | Flyway | 13.12.1（本地与 CI 锁同一版本） |
 | 接入环境 | `dev` |
-| IAM 角色 | `rds-migrate-dev`（OIDC，最小权限，已创建） |
+| IAM 角色 | `rds-migrate-dev`（OIDC，最小权限，由 terraform-aws bootstrap 管理） |
 | GitHub Environment | `dev`，部署分支限定为 `dev`，变量 `AWS_ROLE_ARN` 已填 |
 | 仓库变量 | `MIGRATE_ENVIRONMENTS=["dev"]`、`AWS_REGION=ap-northeast-1` |
 
@@ -292,6 +304,7 @@ sql/R__<描述>.sql             可重复迁移（每次校验变更后重跑）
   全链路没有 AccessKey / 私钥 / 数据库口令入库
 - `flyway.conf` 只放非敏感配置；`check-conventions.sh` 会在每次 PR 和每次迁移前
   扫描 SQL、配置与工作流，拦住 `IDENTIFIED BY`、`AKIA…`、私钥块、JDBC URL 带口令等写法
-- IAM 角色按最小权限拆分，`ssm:StartSession` 只允许带 `Bastion` 标签的实例
+- IAM 角色由 terraform-aws 统一创建，按最小权限拆分，`ssm:StartSession`
+  只允许带 `Bastion` 标签的实例
   和端口转发那一个文档
 - 跳板机实例没有任何入站规则，唯一访问路径是 SSM
