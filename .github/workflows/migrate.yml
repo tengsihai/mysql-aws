@@ -6,6 +6,11 @@ name: 迁移
 #                                                   → 对应环境的 RDS
 #
 #   main 是发布后的归档分支，不触发任何部署（也不在下面的分支列表里）。
+#   发布路径：
+#     feat/* ──PR──► dev ──PR──► staging ──PR──► prod ──PR──► main（归档）
+#
+# 没有 workflow_dispatch：合并 PR 就是审批，不提供手动指定环境迁移的入口。
+# 失败后重跑失败的 job 即可；concurrency 保证同一环境不会并发迁移。
 #
 # 环境怎么选：
 #   environment: ${{ github.ref_name }} 让分支名直接映射到 GitHub Environment，
@@ -23,7 +28,6 @@ on:
   push:
     # 合并即发布：只要合并进环境分支就触发，不按改动路径过滤
     branches: [dev, staging, prod]
-  workflow_dispatch:
 
 permissions:
   id-token: write   # OIDC 换取角色
